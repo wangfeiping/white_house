@@ -51,7 +51,8 @@ sudo manage.sh remove test_user
 ssh restricted_chroot@localhost
 
 ### 或者在本地测试
-sudo su - restricted_chroot
+sudo su - restricted_chroot  
+sudo chroot /chroot/white_house /bin/bash  
 
 ### 检查chroot环境完整性
 sudo chroot /chroot/restricted_user /bin/bash -c "echo 'Chroot test successful'"
@@ -61,4 +62,9 @@ sudo chroot /chroot/restricted_user /bin/bash -c "ldd /bin/ls"
 
 ### 查看系统日志
 sudo journalctl -f
+
+# 检查 chroot 环境是否完整
+sudo ls -la /chroot/ai/  
+sudo tree /chroot/ai/ -L 2  
+
 

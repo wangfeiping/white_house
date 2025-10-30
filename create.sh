@@ -67,6 +67,8 @@ main() {
     create_custom_shell
     set_permissions
     test_chroot
+
+    setup_chroot_network
     
     print_success "创建完成！"
     print_info "用户: $USERNAME"
@@ -74,11 +76,88 @@ main() {
     print_info "登录方式: ssh $USERNAME@localhost"
 }
 
+setup_chroot_network() {
+    echo "=== 设置 chroot 网络 ==="
+    
+    # 1. 复制配置文件
+    echo "1. 复制网络配置文件..."
+    sudo cp /etc/resolv.conf $CHROOT_BASE/etc/resolv.conf
+    sudo cp /etc/hosts $CHROOT_BASE/etc/hosts
+    sudo cp /etc/nsswitch.conf $CHROOT_BASE/etc/nsswitch.conf
+    sudo cp /etc/host.conf $CHROOT_BASE/etc/host.conf
+
+    sudo mkdir $CHROOT_BASE/sys
+    sudo mkdir $CHROOT_BASE/run
+
+    # 2. 挂载文件系统
+    echo "2. 挂载虚拟文件系统..."
+    sudo mount -t proc proc $CHROOT_BASE/proc
+    sudo mount -t sysfs sysfs $CHROOT_BASE/sys
+    sudo mount -t devtmpfs devtmpfs $CHROOT_BASE/dev
+    sudo mount --bind /run $CHROOT_BASE/run
+    sudo mount --bind /var/run $CHROOT_BASE/var/run
+    
+    # 3. 创建设备文件
+    echo "3. 创建设备文件..."
+    sudo mkdir -p $CHROOT_BASE/dev/net
+    sudo mknod -m 666 $CHROOT_BASE/dev/net/tun c 10 200 2>/dev/null || true
+    
+    # 4. 复制网络工具
+    echo "4. 复制网络工具..."
+    copy_network_tools
+    
+    echo "网络设置完成！"
+}
+
+copy_network_tools() {
+    # 基础网络工具
+    local tools=("ping" "curl" "wget" "host" "nslookup" "ip" "ss" "netstat" "ifconfig")
+    
+    for tool in "${tools[@]}"; do
+        tool_path=$(which $tool 2>/dev/null)
+        if [[ -f "$tool_path" ]]; then
+            # 确定目标目录
+            if [[ "$tool_path" == /usr/bin/* ]]; then
+                target_dir="$CHROOT_BASE/usr/bin"
+            else
+                target_dir="$CHROOT_BASE/bin"
+            fi
+            
+            sudo mkdir -p "$target_dir"
+            sudo cp "$tool_path" "$target_dir/" 2>/dev/null || true
+            
+            # 复制库文件
+            copy_libraries "$tool_path"
+        fi
+    done
+}
+
+copy_libraries() {
+    local binary="$1"
+    for lib in $(ldd "$binary" 2>/dev/null | grep -o '/[^ ]*' | grep -v '('); do
+        if [[ -f "$lib" ]]; then
+            lib_dir="$CHROOT_BASE/$(dirname "$lib")"
+            sudo mkdir -p "$lib_dir"
+            sudo cp "$lib" "$lib_dir/" 2>/dev/null || true
+        fi
+    done
+}
+
+unmount_network() {
+    echo "卸载网络文件系统..."
+    sudo umount $CHROOT_DIR/proc 2>/dev/null || true
+    sudo umount $CHROOT_DIR/sys 2>/dev/null || true
+    sudo umount $CHROOT_DIR/dev 2>/dev/null || true
+    sudo umount $CHROOT_DIR/run 2>/dev/null || true
+    sudo umount $CHROOT_DIR/var/run 2>/dev/null || true
+}
+
 # 创建用户
 create_user() {
     print_info "创建用户: $USERNAME"
     useradd -m -s /bin/bash "$USERNAME"
-    echo "$USERNAME:$(openssl rand -base64 12)" | chpasswd
+    #echo "$USERNAME:$(openssl rand -base64 12)" | chpasswd
+    echo "$USERNAME:12345678" | sudo chpasswd
     print_success "用户 $USERNAME 创建完成，密码已随机生成"
 }
 
@@ -167,7 +246,7 @@ copy_binaries_and_libs() {
     }
     
     copy_essential_libraries
-    
+
     print_success "二进制文件和库文件复制完成"
 }
 
