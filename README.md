@@ -35,13 +35,30 @@ sudo /usr/local/bin/create.sh user2 /chroot/user2_white_house
 sudo create.sh test_user
 
 ## 管理
-sudo manage.sh status test_user
-sudo manage.sh update test_user
-sudo manage.sh mount test_user
+sudo manage.sh status test_user  
+sudo manage.sh update test_user  
+sudo manage.sh mount test_user  
 
 ## 测试连接
 ssh test_user@localhost
 
 ## 移除（如果需要）
 sudo manage.sh remove test_user
+
+## 測試驗證
+
+### 测试SSH连接
+ssh restricted_chroot@localhost
+
+### 或者在本地测试
+sudo su - restricted_chroot
+
+### 检查chroot环境完整性
+sudo chroot /chroot/restricted_user /bin/bash -c "echo 'Chroot test successful'"
+
+### 检查缺少的库文件
+sudo chroot /chroot/restricted_user /bin/bash -c "ldd /bin/ls"
+
+### 查看系统日志
+sudo journalctl -f
 
